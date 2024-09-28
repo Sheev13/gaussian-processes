@@ -11,7 +11,7 @@ from torch import sigmoid as logistic
 
 from .utils import choose_m_from_n
 from .covariance_functions import ExponentialKernel, Matern1_5Kernel, Matern2_5Kernel, SquaredExponentialKernel
-from .mean_functions import ZeroMean, ConstantMean, OFSMean, FSSMean
+from .mean_functions import ZeroMean, ConstantMean
 from .likelihoods import GaussianLikelihood, BernoulliLikelihood
 
 from typing import Optional
@@ -35,8 +35,6 @@ class GPPrior(nn.Module):
             a string denoting the choice of prior mean function. Options are:
                 'zero',
                 'constant',
-                'ofs',
-                'fss'.
             Default: 'zero'.
         l: 
             a positive float representing the lengthscale hyperparameter of the 
@@ -73,30 +71,6 @@ class GPPrior(nn.Module):
                 if the mean function is 'constant'. This is ignored if the mean
                 function is something other than 'constant'.
                 Default: 0.0.
-            positive_gradient_init:
-                a float representing the (initial) value of m. This is ignored
-                if the mean function is something other than 'ofs'.
-                Default: 1.0.
-            offset_init:
-                a float representing the (initial) value of c. This is ignored
-                if the mean function is something other than 'ofs'.
-                Default: 2.0.
-            guideprice_dim:
-                the index of the guideprice dimension. This is ignored if the 
-                mean function is not 'ofs' or 'fss'.
-                Default: None.
-            sharpness_init:
-                a float representing the (initial) value of s. This is ignored
-                if the mean function is not 'fss'.
-                Default: 1.0.
-            peak_init:
-                a float representing the (initial) value of p. This is ignored
-                if the mean function is not 'fss'.
-                Default: 0.0.
-            loc_init:
-                a float representing the (initial) value of l. This is ignored
-                if the mean function is not 'fss'.
-                Default: 0.0.
     """
     
     def __init__(
@@ -127,8 +101,8 @@ class GPPrior(nn.Module):
                                                           ard=ard)
         # initialise mean function object
         mean_function = mean_function.lower()
-        implemented_meanfunc_names = ['zero', 'constant', 'ofs', 'fss']
-        implemented_meanfunc_objs = [ZeroMean, ConstantMean, OFSMean, FSSMean]
+        implemented_meanfunc_names = ['zero', 'constant']
+        implemented_meanfunc_objs = [ZeroMean, ConstantMean]
         if mean_function not in implemented_meanfunc_names:
             raise NotImplementedError(f"{mean_function} either contains a typo or corresponds to a mean function not yet implemented")
         for i in range(len(implemented_meanfunc_names)):
@@ -176,8 +150,6 @@ class GaussianProcess(nn.Module):
                 a string denoting the choice of prior mean function. Options are:
                     'zero',
                     'constant',
-                    'ofs',
-                    'fss'.
                 Default: 'zero'.
             l: 
                 a positive float representing the lengthscale hyperparameter of the 
@@ -213,30 +185,6 @@ class GaussianProcess(nn.Module):
                     a float representing the (initial) constant value of the prior mean
                     if the mean function is 'constant'. This is ignored if the mean
                     function is something other than 'constant'.
-                    Default: 0.0.
-                positive_gradient_init:
-                    a float representing the (initial) value of m. This is ignored
-                    if the mean function is something other than 'ofs'.
-                    Default: 1.0.
-                offset_init:
-                    a float representing the (initial) value of c. This is ignored
-                    if the mean function is something other than 'ofs'.
-                    Default: 2.0.
-                guideprice_dim:
-                    the index of the guideprice dimension. This is ignored if the 
-                    mean function is not 'ofs' or 'fss'.
-                    Default: None.
-                sharpness_init:
-                    a float representing the (initial) value of s. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 1.0.
-                peak_init:
-                    a float representing the (initial) value of p. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 0.0.
-                loc_init:
-                    a float representing the (initial) value of l. This is ignored
-                    if the mean function is not 'fss'.
                     Default: 0.0.
         
         
@@ -416,8 +364,6 @@ class SparseVariationalGaussianProcess(nn.Module):
                 a string denoting the choice of prior mean function. Options are:
                     'zero',
                     'constant',
-                    'ofs',
-                    'fss'.
                 Default: 'zero'.
             l: 
                 a positive float representing the lengthscale hyperparameter of the 
@@ -454,31 +400,6 @@ class SparseVariationalGaussianProcess(nn.Module):
                     if the mean function is 'constant'. This is ignored if the mean
                     function is something other than 'constant'.
                     Default: 0.0.
-                positive_gradient_init:
-                    a float representing the (initial) value of m. This is ignored
-                    if the mean function is something other than 'ofs'.
-                    Default: 1.0.
-                offset_init:
-                    a float representing the (initial) value of c. This is ignored
-                    if the mean function is something other than 'ofs'.
-                    Default: 2.0.
-                guideprice_dim:
-                    the index of the guideprice dimension. This is ignored if the 
-                    mean function is not 'ofs' or 'fss'.
-                    Default: None.
-                sharpness_init:
-                    a float representing the (initial) value of s. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 1.0.
-                peak_init:
-                    a float representing the (initial) value of p. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 0.0.
-                loc_init:
-                    a float representing the (initial) value of l. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 0.0.
-        
         
     Example usage:
     
@@ -542,16 +463,13 @@ class SparseVariationalGaussianProcess(nn.Module):
         else:
             raise NotImplementedError(f"{likelihood} likelihood not recognised")
             
-        # learnable parameters
-        # inducing inputs Z and inducing variables u with mean vector m and covariance matrix S
+        # inducing points/inputs
         self.Z = nn.Parameter(torch.randn((num_inducing, num_inputs)), requires_grad=True)
-        self.m = nn.Parameter(torch.randn((num_inducing,)), requires_grad=True)
-        # parameterise the inducing variable covariance as the log diagonal and off-diagonals of the
-        # Cholesky decomposition of the matrix. These values are unconstrained unlike those of 
-        # the covariance matrix. This is the matrix equivalent of parameterising a positive-
-        # only parameter in log-space.
-        self.S_log_chol_diag = nn.Parameter(torch.log(torch.ones((num_inducing,))*0.1 + torch.randn((num_inducing,)) * 0.01), requires_grad=True)
-        self.S_chol_off_diag = nn.Parameter(torch.ones((num_inducing, num_inducing))*0.001 + torch.randn((num_inducing, num_inducing)) * 0.0001, requires_grad=True)
+        # inducing output means
+        self.m_u = nn.Parameter(torch.randn((num_inducing,)), requires_grad=True)
+        # inducing output covariance function cholesky decomposition parameterisations
+        self.Lu_log_diag = nn.Parameter(torch.log(torch.ones((num_inducing,))*0.1 + torch.randn((num_inducing,)) * 0.01), requires_grad=True)
+        self.Lu_off_diag = nn.Parameter(torch.randn((num_inducing, num_inducing)) * 0.001, requires_grad=True)
             
     def init_inducing_variables(self, X: torch.Tensor, t: torch.Tensor):
         """
@@ -568,18 +486,18 @@ class SparseVariationalGaussianProcess(nn.Module):
             self.m.data = t[inducing_idx,:]
     
     @property
-    def S_chol(self):
+    def Lu(self):
         """Construct the Cholesky decomposition of the inducing variable covariance matrix
         from the nn.Parameters we have set up.
         """
-        return torch.diag(self.S_log_chol_diag.exp()+1e-8) + torch.tril(self.S_chol_off_diag, diagonal=-1)
+        return torch.diag(self.Lu_log_diag.exp()+1e-8) + torch.tril(self.Lu_off_diag, diagonal=-1)
     
     @property
     def S(self):
         """Compute the inducing variable covariance matrix from its Choleksy decomposition.
         Add 1e-8 jitter for numerical stability.
         """
-        return self.S_chol @ self.S_chol.T + torch.eye(self.num_inducing)*1e-8
+        return self.Lu @ self.Lu.T + torch.eye(self.num_inducing)*1e-8
 
     @property
     def q_u(self):
@@ -592,15 +510,15 @@ class SparseVariationalGaussianProcess(nn.Module):
         
         This is a direct implementation of Hensman 2015 section 4."""
         
-        K_mm = self.prior.kernel(self.Z)
-        K_nm = self.prior.kernel(X_batch, self.Z)
-        assert K_nm.shape[1] == self.num_inducing
-        K_nn_diag = self.prior.kernel.diagonal(X_batch)
-        L_mm = torch.linalg.cholesky(K_mm)    
-        A = torch.cholesky_solve(K_nm.T, L_mm).T
+        Kmm = self.prior.kernel(self.Z)
+        Knm = self.prior.kernel(X_batch, self.Z)
+        assert Knm.shape[1] == self.num_inducing
+        Knn_diag = self.prior.kernel.diagonal(X_batch)
+        Lmm = torch.linalg.cholesky(Kmm)    
+        A = torch.cholesky_solve(Knm.T, Lmm).T
         
         f_mu = (A @ self.m).squeeze() + self.prior.mean(X_batch)
-        f_vars = K_nn_diag - torch.einsum('ij,jk,ki->i', [A, K_mm - self.S, A.T])
+        f_vars = Knn_diag - torch.einsum('ij,jk,ki->i', [A, Kmm - self.S, A.T])
         # f_vars = K_nn_diag - (A @ (K_mm - self.S) @ A.T).diagonal() # more readable but slower than above line
         return torch.distributions.Normal(f_mu, f_vars.sqrt())
     
@@ -732,8 +650,6 @@ class SparseOrthogonalVariationalGaussianProcess(nn.Module):
                 a string denoting the choice of prior mean function. Options are:
                     'zero',
                     'constant',
-                    'ofs',
-                    'fss'.
                 Default: 'zero'.
             l: 
                 a positive float representing the lengthscale hyperparameter of the 
@@ -769,32 +685,7 @@ class SparseOrthogonalVariationalGaussianProcess(nn.Module):
                     a float representing the (initial) constant value of the prior mean
                     if the mean function is 'constant'. This is ignored if the mean
                     function is something other than 'constant'.
-                    Default: 0.0.
-                positive_gradient_init:
-                    a float representing the (initial) value of m. This is ignored
-                    if the mean function is something other than 'ofs'.
-                    Default: 1.0.
-                offset_init:
-                    a float representing the (initial) value of c. This is ignored
-                    if the mean function is something other than 'ofs'.
-                    Default: 2.0.
-                guideprice_dim:
-                    the index of the guideprice dimension. This is ignored if the 
-                    mean function is not 'ofs' or 'fss'.
-                    Default: None.
-                sharpness_init:
-                    a float representing the (initial) value of s. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 1.0.
-                peak_init:
-                    a float representing the (initial) value of p. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 0.0.
-                loc_init:
-                    a float representing the (initial) value of l. This is ignored
-                    if the mean function is not 'fss'.
-                    Default: 0.0.
-        
+                    Default: 0.0.        
         
     Example usage:
     
